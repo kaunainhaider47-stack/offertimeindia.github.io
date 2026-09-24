@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Canvas — Photo Editor</title>
+  <style>
+    :root { --bg:#101114; --panel:#191b20; --panel-2:#242730; --line:#30343e; --muted:#969ba8; --text:#f7f8fb; --accent:#7c5cff; --accent-2:#a892ff; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:var(--bg); color:var(--text); font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    button, input { font:inherit; }
+    button { color:inherit; border:0; cursor:pointer; }
+    .app { min-height:100vh; display:flex; flex-direction:column; }
+    header { height:64px; padding:0 24px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--line); background:#141519; }
+    .brand { display:flex; align-items:center; gap:10px; font-weight:750; letter-spacing:-.02em; }
+    .brand-mark { width:28px; height:28px; display:grid; place-items:center; border-radius:8px; background:linear-gradient(135deg,#7c5cff,#d04fff); font-size:15px; }
+    .header-actions { display:flex; align-items:center; gap:10px; }
+    .btn { padding:9px 15px; border-radius:9px; background:var(--panel-2); color:#e8e9ed; border:1px solid var(--line); transition:.18s; }
+    .btn:hover { border-color:#5d6472; background:#2b2f39; }
+    .btn.primary { background:var(--accent); border-color:var(--accent); font-weight:650; }
+    .btn.primary:hover { background:#8b70ff; }
+    main { flex:1; min-height:0; display:grid; grid-template-columns:minmax(0,1fr) 330px; }
+    .workspace { min-width:0; display:flex; flex-direction:column; position:relative; }
+    .canvas-area { flex:1; min-height:430px; display:flex; align-items:center; justify-content:center; padding:30px; overflow:auto; position:relative; background-color:#292b31; background-image:linear-gradient(45deg,#33363d 25%,transparent 25%),linear-gradient(-45deg,#33363d 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#33363d 75%),linear-gradient(-45deg,transparent 75%,#33363d 75%); background-size:24px 24px; background-position:0 0,0 12px,12px -12px,-12px 0; }
+    #canvas { max-width:100%; max-height:calc(100vh - 185px); width:auto; height:auto; display:block; box-shadow:0 18px 55px #0008; }
+    .empty-state { width:min(470px,92%); padding:42px 30px; text-align:center; border:1px dashed #686d7a; border-radius:18px; background:#1b1d23dd; transition:.2s; }
+    .empty-state.dragging { border-color:var(--accent-2); background:#292440ee; transform:scale(1.015); }
+    .upload-icon { width:50px; height:50px; display:grid; place-items:center; margin:0 auto 18px; border-radius:14px; color:#c7bdff; background:#30275b; font-size:25px; }
+    .empty-state h1 { font-size:20px; margin:0 0 8px; }
+    .empty-state p { margin:0 0 22px; color:var(--muted); font-size:14px; }
+    .toolbar { height:82px; padding:10px 12px; display:flex; justify-content:center; gap:6px; overflow-x:auto; background:#15171b; border-top:1px solid var(--line); }
+    .tool { min-width:77px; padding:8px 10px; background:transparent; border-radius:10px; color:var(--muted); display:flex; flex-direction:column; align-items:center; gap:5px; font-size:12px; }
+    .tool span:first-child { font-size:21px; line-height:23px; filter:grayscale(.2); }
+    .tool:hover,.tool.active { color:#fff; background:#282b34; }
+    aside { background:var(--panel); border-left:1px solid var(--line); min-width:0; overflow:auto; }
+    .panel { padding:22px 20px; }
+    .panel.hidden { display:none; }
+    .panel-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
+    .panel-title { font-size:17px; font-weight:700; }
+    .close { background:none; color:var(--muted); font-size:22px; }
+    .hint { color:var(--muted); font-size:13px; line-height:1.5; }
+    .filter-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px 8px; }
+    .filter-card { background:none; text-align:left; padding:0; color:var(--muted); font-size:11px; }
+    .filter-card.active { color:#fff; }
+    .thumb { width:100%; aspect-ratio:1; margin-bottom:7px; border-radius:8px; overflow:hidden; background:#30333a; border:2px solid transparent; }
+    .filter-card.active .thumb { border-color:var(--accent-2); }
+    .thumb canvas { width:100%; height:100%; display:block; }
+    .range-row { display:flex; justify-content:space-between; color:var(--muted); font-size:12px; margin:24px 0 8px; }
+    input[type=range] { width:100%; accent-color:var(--accent); }
+    .control { display:flex; align-items:center; gap:10px; margin:16px 0; }
+    .control label { min-width:74px; font-size:13px; color:var(--muted); }
+    .control input[type=range] { flex:1; }
+    .value { width:34px; text-align:right; color:#fff; font-size:12px; }
+    .notice { padding:12px; border-radius:9px; background:#242730; color:var(--muted); font-size:12px; line-height:1.45; }
+    .text-input { width:100%; padding:11px 12px; color:#fff; border:1px solid var(--line); border-radius:8px; outline:none; background:#111216; }
+    .text-input:focus { border-color:var(--accent); }
+    @media (max-width:780px) { header { padding:0 14px; } .header-actions .btn:first-child { display:none; } main { display:flex; flex-direction:column; } aside { border-left:0; border-top:1px solid var(--line); max-height:310px; } .canvas-area { min-height:360px; padding:18px; } #canvas { max-height:calc(100vh - 300px); } }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="brand"><div class="brand-mark">✦</div><span>Canvas</span></div>
+      <div class="header-actions"><button class="btn" id="resetBtn">Reset</button><button class="btn primary" id="downloadBtn">↓ Download</button></div>
+    </header>
+    <main>
+      <section class="workspace">
+        <div class="canvas-area" id="dropZone">
+          <div class="empty-state" id="emptyState">
+            <div class="upload-icon">↑</div><h1>Start with an image</h1><p>Drop an image here or choose a file to begin editing.</p>
+            <button class="btn primary" id="chooseBtn">Choose image</button><input id="fileInput" type="file" accept="image/*" hidden />
+          </div>
+          <canvas id="canvas" hidden></canvas>
+        </div>
+        <nav class="toolbar" aria-label="Editing tools">
+          <button class="tool active" data-tool="filters"><span>◌</span><span>Filters</span></button><button class="tool" data-tool="adjust"><span>☷</span><span>Adjust</span></button><button class="tool" data-tool="crop"><span>⌗</span><span>Crop</span></button><button class="tool" data-tool="text"><span>T</span><span>Text</span></button><button class="tool" data-tool="draw"><span>♢</span><span>Draw</span></button><button class="tool" data-tool="stickers"><span>☆</span><span>Stickers</span></button>
+        </nav>
+      </section>
+      <aside>
+        <div class="panel" id="filtersPanel"><div class="panel-head"><div class="panel-title">Filters</div><button class="close" aria-label="Close panel">×</button></div><div class="filter-grid" id="filterGrid"></div><div class="range-row"><span>Intensity</span><strong id="intensityValue">100%</strong></div><input id="intensity" type="range" min="0" max="100" value="100" /></div>
+        <div class="panel hidden" id="adjustPanel"><div class="panel-head"><div class="panel-title">Adjust</div><button class="close">×</button></div><div class="control"><label>Brightness</label><input data-adjust="brightness" type="range" min="-100" max="100" value="0"><span class="value">0</span></div><div class="control"><label>Contrast</label><input data-adjust="contrast" type="range" min="-100" max="100" value="0"><span class="value">0</span></div><div class="control"><label>Saturation</label><input data-adjust="saturation" type="range" min="-100" max="100" value="0"><span class="value">0</span></div></div>
+        <div class="panel hidden" id="cropPanel"><div class="panel-head"><div class="panel-title">Crop</div><button class="close">×</button></div><p class="hint">Use the browser's built-in image bounds for a clean export. Crop presets can be added without changing your original.</p><button class="btn" id="squareCrop">Make square</button></div>
+        <div class="panel hidden" id="textPanel"><div class="panel-head"><div class="panel-title">Text</div><button class="close">×</button></div><input class="text-input" id="textInput" placeholder="Type something..." /><p class="hint">Press Enter to place text in the center.</p></div>
+        <div class="panel hidden" id="drawPanel"><div class="panel-head"><div class="panel-title">Draw</div><button class="close">×</button></div><p class="hint">Draw directly on the canvas after choosing a loaded image.</p><div class="control"><label>Brush size</label><input id="brushSize" type="range" min="1" max="40" value="8"><span class="value" id="brushValue">8</span></div></div>
+        <div class="panel hidden" id="stickersPanel"><div class="panel-head"><div class="panel-title">Stickers</div><button class="close">×</button></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sticker">♥</button><button class="btn sticker">★</button><button class="btn sticker">☀</button><button class="btn sticker">✦</button></div><p class="hint">Choose a sticker, then it will be added to the center of your image.</p></div>
+      </aside>
+    </main>
+  </div>
+<script>
+  // Editor state requested by the app contract.
+  let uploadedImage = null;
+  let canvasRef = document.getElementById('canvas');
+  let isImageLoaded = false;
+  const ctx = canvasRef.getContext('2d', { willReadFrequently: true });
+  const dropZone = document.getElementById('dropZone'), emptyState = document.getElementById('emptyState'), fileInput = document.getElementById('fileInput');
+  const filters = ['Original','Grayscale','Sepia','Vintage','B&W','Vibrant','Cool','Warm','Dramatic'];
+  let originalPixels = null, activeFilter = 'Original', intensity = 100, drawing = false, adjustments = { brightness:0, contrast:0, saturation:0 };
+  const clamp = n => Math.max(0, Math.min(255, n));
+  function loadFile(file) { if (!file || !file.type.startsWith('image/')) return; const reader = new FileReader(); reader.onload = e => { uploadedImage = new Image(); uploadedImage.onload = () => { canvasRef.width = uploadedImage.naturalWidth; canvasRef.height = uploadedImage.naturalHeight; ctx.drawImage(uploadedImage,0,0); originalPixels = ctx.getImageData(0,0,canvasRef.width,canvasRef.height); isImageLoaded = true; emptyState.hidden = true; canvasRef.hidden = false; buildFilterThumbnails(); }; uploadedImage.src = e.target.result; }; reader.readAsDataURL(file); }
+  function filterPixel(r,g,b,name) { const avg=(r+g+b)/3; if(name==='Grayscale') return [avg,avg,avg]; if(name==='Sepia') return [r*.393+g*.769+b*.189,r*.349+g*.686+b*.168,r*.272+g*.534+b*.131]; if(name==='B&W'){const v=avg>145?255:0;return[v,v,v];} if(name==='Vintage') return [r*.9+g*.1+20,g*.85+b*.1+10,b*.7+25]; if(name==='Vibrant') return [avg+(r-avg)*1.45,avg+(g-avg)*1.45,avg+(b-avg)*1.45]; if(name==='Cool') return [r*.9,g*1.02+4,b*1.15+12]; if(name==='Warm') return [r*1.12+10,g*1.02+3,b*.82]; if(name==='Dramatic'){const c=(avg-128)*1.45+128;return[c+(r-avg),c+(g-avg),c+(b-avg)];} return [r,g,b]; }
+  function render() { if(!isImageLoaded || !originalPixels) return; const src=originalPixels.data, out=ctx.createImageData(originalPixels.width,originalPixels.height), d=out.data, t=intensity/100; for(let i=0;i<src.length;i+=4){let [r,g,b]=filterPixel(src[i],src[i+1],src[i+2],activeFilter); r=src[i]+(r-src[i])*t;g=src[i+1]+(g-src[i+1])*t;b=src[i+2]+(b-src[i+2])*t; const br=adjustments.brightness*2.55, con=(adjustments.contrast+100)/100; r=(r-128)*con+128+br;g=(g-128)*con+128+br;b=(b-128)*con+128+br; const lum=.299*r+.587*g+.114*b, sat=1+adjustments.saturation/100; d[i]=clamp(lum+(r-lum)*sat);d[i+1]=clamp(lum+(g-lum)*sat);d[i+2]=clamp(lum+(b-lum)*sat);d[i+3]=src[i+3];} ctx.putImageData(out,0,0); }
+  function buildFilterThumbnails(){ const grid=document.getElementById('filterGrid'); grid.innerHTML=''; filters.forEach(name=>{const button=document.createElement('button');button.className='filter-card'+(name===activeFilter?' active':'');button.innerHTML='<div class="thumb"><canvas width="100" height="100"></canvas></div><span>'+name+'</span>'; const thumb=button.querySelector('canvas'), tc=thumb.getContext('2d'); tc.drawImage(uploadedImage,0,0,100,100); const data=tc.getImageData(0,0,100,100), p=data.data; for(let i=0;i<p.length;i+=4){const q=filterPixel(p[i],p[i+1],p[i+2],name);p[i]=q[0];p[i+1]=q[1];p[i+2]=q[2];}tc.putImageData(data,0,0); button.onclick=()=>{activeFilter=name; document.querySelectorAll('.filter-card').forEach(x=>x.classList.remove('active'));button.classList.add('active');render();};grid.appendChild(button);}); }
+  document.getElementById('chooseBtn').onclick=()=>fileInput.click(); fileInput.onchange=e=>loadFile(e.target.files[0]);
+  ['dragenter','dragover'].forEach(ev=>dropZone.addEventListener(ev,e=>{e.preventDefault();emptyState.classList.add('dragging');})); ['dragleave','drop'].forEach(ev=>dropZone.addEventListener(ev,e=>{e.preventDefault();emptyState.classList.remove('dragging');})); dropZone.addEventListener('drop',e=>loadFile(e.dataTransfer.files[0]));
+  document.getElementById('intensity').oninput=e=>{intensity=+e.target.value;document.getElementById('intensityValue').textContent=intensity+'%';render();};
+  document.querySelectorAll('[data-adjust]').forEach(input=>input.oninput=e=>{adjustments[e.target.dataset.adjust]=+e.target.value;e.target.nextElementSibling.textContent=e.target.value;render();});
+  function openPanel(name){document.querySelectorAll('.panel').forEach(p=>p.classList.add('hidden'));document.getElementById(name+'Panel').classList.remove('hidden');document.querySelectorAll('.tool').forEach(t=>t.classList.toggle('active',t.dataset.tool===name));}
+  document.querySelectorAll('.tool').forEach(t=>t.onclick=()=>openPanel(t.dataset.tool)); document.querySelectorAll('.close').forEach(x=>x.onclick=()=>x.closest('.panel').classList.add('hidden'));
+  document.getElementById('downloadBtn').onclick=()=>{if(!isImageLoaded)return;const a=document.createElement('a');a.download='canvas-edit.png';a.href=canvasRef.toDataURL('image/png');a.click();};
+  document.getElementById('resetBtn').onclick=()=>{if(!isImageLoaded)return;activeFilter='Original';intensity=100;adjustments={brightness:0,contrast:0,saturation:0};document.getElementById('intensity').value=100;document.getElementById('intensityValue').textContent='100%';document.querySelectorAll('[data-adjust]').forEach(x=>{x.value=0;x.nextElementSibling.textContent='0';});render();buildFilterThumbnails();};
+  document.getElementById('textInput').onkeydown=e=>{if(e.key==='Enter'&&isImageLoaded&&e.target.value){render();ctx.save();ctx.font=Math.max(24,canvasRef.width/18)+'px sans-serif';ctx.fillStyle='white';ctx.textAlign='center';ctx.shadowColor='#000';ctx.shadowBlur=7;ctx.fillText(e.target.value,canvasRef.width/2,canvasRef.height/2);ctx.restore();e.target.value='';}};
+  document.getElementById('brushSize').oninput=e=>document.getElementById('brushValue').textContent=e.target.value;
+  canvasRef.addEventListener('pointerdown',e=>{if(!isImageLoaded)return;drawing=true;canvasRef.setPointerCapture(e.pointerId);ctx.beginPath();const p=point(e);ctx.moveTo(p.x,p.y);}); canvasRef.addEventListener('pointermove',e=>{if(!drawing)return;const p=point(e);ctx.lineTo(p.x,p.y);ctx.strokeStyle='#ffffff';ctx.lineWidth=+document.getElementById('brushSize').value;ctx.lineCap='round';ctx.stroke();}); ['pointerup','pointercancel'].forEach(e=>canvasRef.addEventListener(e,()=>drawing=false)); function point(e){const r=canvasRef.getBoundingClientRect();return{x:(e.clientX-r.left)*canvasRef.width/r.width,y:(e.clientY-r.top)*canvasRef.height/r.height};}
+  document.querySelectorAll('.sticker').forEach(b=>b.onclick=()=>{if(!isImageLoaded)return;render();ctx.save();ctx.font=Math.max(38,canvasRef.width/10)+'px serif';ctx.textAlign='center';ctx.fillText(b.textContent,canvasRef.width/2,canvasRef.height/2);ctx.restore();});
+  document.getElementById('squareCrop').onclick=()=>{if(!isImageLoaded)return;const size=Math.min(canvasRef.width,canvasRef.height), sx=(canvasRef.width-size)/2,sy=(canvasRef.height-size)/2;const temp=document.createElement('canvas');temp.width=temp.height=size;temp.getContext('2d').drawImage(canvasRef,sx,sy,size,size,0,0,size,size);canvasRef.width=canvasRef.height=size;ctx.drawImage(temp,0,0);originalPixels=ctx.getImageData(0,0,size,size);buildFilterThumbnails();render();};
+</script>
+</body>
+</html>
